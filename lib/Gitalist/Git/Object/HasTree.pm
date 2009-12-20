@@ -2,11 +2,35 @@ package Gitalist::Git::Object::HasTree;
 use MooseX::Declare;
 
 role Gitalist::Git::Object::HasTree {
+    use MooseX::Types::Common::String qw/NonEmptySimpleStr/;
+    use Moose::Autobox;
+
     has tree => ( isa => 'ArrayRef[Gitalist::Git::Object]',
                   required => 0,
                   is => 'ro',
                   lazy_build => 1 );
 
+    method get_blob_by_path ( NonEmptySimpleStr $path ) {
+        $path = [ split('/', $path) ];
+        my $node = $self->tree->grep(
+            sub { $_->file eq $path->head }
+        )->shift;
+
+        if ($path->length == 1) {
+            # at the end of the path
+            if ($node->type eq 'blob') {
+                return $node
+            } else {
+                die "path did not match a blob";
+            }
+        } else {
+            if ($node->type eq 'tree') {
+                return $node->get_blob_by_path( $path->tail->join('/') );
+            } else {
+                die "path did not match a blob";
+            }
+        }
+    }
 
 ## Builders
     method _build_tree {
