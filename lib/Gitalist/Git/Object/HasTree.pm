@@ -4,6 +4,8 @@ use MooseX::Declare;
 role Gitalist::Git::Object::HasTree {
     use MooseX::Types::Common::String qw/NonEmptySimpleStr/;
     use Moose::Autobox;
+    use aliased 'Gitalist::Git::Object::Blob';
+    use aliased 'Gitalist::Git::Object::Tree';
 
     has tree => ( isa => 'ArrayRef[Gitalist::Git::Object]',
                   required => 0,
@@ -12,23 +14,16 @@ role Gitalist::Git::Object::HasTree {
 
     method get_blob_by_path ( NonEmptySimpleStr $path ) {
         $path = [ split('/', $path) ];
-        my $node = $self->tree->grep(
-            sub { $_->file eq $path->head }
-        )->shift;
+        my $object = $self->tree
+            ->grep( sub { $_->file eq $path->head } )
+                ->shift;
 
-        if ($path->length == 1) {
-            # at the end of the path
-            if ($node->type eq 'blob') {
-                return $node
-            } else {
-                die "path did not match a blob";
-            }
+        if ( $path->length == 1 and $object->isa(Blob) ) {
+            return $object
+        } elsif ( $path->length > 1 and $object->isa(Tree) ) {
+            return $object->get_blob_by_path( $path->tail->join('/') );
         } else {
-            if ($node->type eq 'tree') {
-                return $node->get_blob_by_path( $path->tail->join('/') );
-            } else {
-                die "path did not match a blob";
-            }
+            die "path did not match a blob";
         }
     }
 
@@ -80,6 +75,9 @@ Role for objects which have a tree - C<Commit> and C<Tree> objects.
 
 =head1 METHODS
 
+=head2 get_blob_by_path(Str $path)
+
+Returns a Blob for the given path.  Throws exception on failure.
 
 =head1 AUTHORS
 
