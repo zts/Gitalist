@@ -169,47 +169,48 @@ sub blame : Chained('base') Args(0) {
     unless $c->stash->{no_wrapper};
 }
 
-sub _blob_objs {
-  my ( $self, $c ) = @_;
-  my $repository = $c->stash->{Repository};
-  my $h  = $c->req->param('h')
-       || $repository->hash_by_path($c->req->param('hb'), $c->req->param('f'))
-       || die "No file or sha1 provided.";
-  my $hb = $c->req->param('hb')
-       || $repository->head_hash
-       || die "Couldn't discern the corresponding head.";
-
-  my $filename = $c->req->param('f') || '';
-
-  my $blob = $repository->get_object($h);
-  $blob = $repository->get_object(
-    $repository->hash_by_path($h || $hb, $filename)
-  ) if $blob->type ne 'blob';
-
-  return $blob, $repository->get_object($hb), $filename;
-}
-
 =head2 blob
 
 The blob action i.e the contents of a file.
 
 =cut
 
+# blob can be identified by
+# ?h = sha1 of a blob, OR
+# ?f = file path, with optional
+# ?hb = sha1 of a commit
 sub blob : Chained('base') Args(0) {
-  my ( $self, $c ) = @_;
+    my ( $self, $c ) = @_;
+    my $repo = $c->stash->{Repository};
+    my $blob_sha1 = $c->req->param('h');
+    my $blob_path = $c->req->param('f');
+    my $commit = $repo->get_object(
+        $c->req->param('hb') || $repo->head_hash
+    );
 
-  my($blob, $head, $filename) = $self->_blob_objs($c);
-  $c->stash(
-    blob     => $blob->content,
-    head     => $head,
-    filename => $filename,
-    # XXX Hack hack hack, see View::SyntaxHighlight
-    language => ($filename =~ /\.p[lm]$/i ? 'Perl' : ''),
-    action   => 'blob',
-  );
+    if (defined $blob_sha1) {
+        $c->stash(
+            blob     => $repo->get_object($blob_sha1)->content,
+            filename => '',
+        );
+    } elsif (defined $blob_path) {
+        $c->stash(
+            blob     => $commit->get_blob_by_path($blob_path)->content,
+            filename => $blob_path,
+        );
+    } else {
+        die "No file or sha1 provided.";
+    }
 
-  $c->forward('View::SyntaxHighlight')
-    unless $c->stash->{no_wrapper};
+    $c->stash(
+        head     => $commit,
+        # XXX Hack hack hack, see View::SyntaxHighlight
+        language => ($blob_path =~ /\.p[lm]$/i ? 'Perl' : ''),
+        action   => 'blob',
+    );
+
+    $c->forward('View::SyntaxHighlight')
+        unless $c->stash->{no_wrapper};
 }
 
 =head2 blob_plain
@@ -221,9 +222,11 @@ The plain text version of blob, where file is rendered as is.
 sub blob_plain : Chained('base') Args(0) {
   my($self, $c) = @_;
 
-  my($blob) = $self->_blob_objs($c);
+  $c->stash->{no_wrapper} = 1;
+  $c->forward($self->action_for('blob'));
+
   $c->response->content_type('text/plain; charset=utf-8');
-  $c->response->body($blob->content);
+  $c->response->body($c->stash-{blob});
   $c->response->status(200);
 }
 
