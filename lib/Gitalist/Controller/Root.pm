@@ -226,7 +226,7 @@ sub blob_plain : Chained('base') Args(0) {
   $c->forward($self->action_for('blob'));
 
   $c->response->content_type('text/plain; charset=utf-8');
-  $c->response->body($c->stash-{blob});
+  $c->response->body($c->stash->{blob});
   $c->response->status(200);
 }
 
