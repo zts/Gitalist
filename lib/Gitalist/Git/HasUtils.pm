@@ -17,6 +17,7 @@ role Gitalist::Git::HasUtils {
         handles => [qw/
             run_cmd
             run_cmd_fh
+            run_cmd_gz_fh
             run_cmd_list
             get_gpp_object
             gpp

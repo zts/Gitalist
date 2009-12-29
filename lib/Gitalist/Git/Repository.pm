@@ -161,16 +161,19 @@ class Gitalist::Git::Repository with Gitalist::Git::HasUtils {
         unless ($formats->exists($format)) {
             die("No such format: $format");
         }
-        $format = $formats->{$format};
+        my $gitformat = $formats->{$format};
         my $name = $self->name;
         $name =~ s,([^/])/*\.git$,$1,;
         my $filename = $name;
         $filename .= "-$sha1.$format";
         $name =~ s/\047/\047\\\047\047/g;
 
-        my @cmd = ('archive', "--format=$format", "--prefix=$name/", $sha1);
-        return ($filename, $self->run_cmd_fh(@cmd));
-        # TODO - support compressed archives
+        my @cmd = ('archive', "--format=$gitformat", "--prefix=$name/", $sha1);
+        if ($gitformat eq 'tar') {
+            return ($filename, $self->run_cmd_gz_fh(@cmd));
+        } else {
+            return ($filename, $self->run_cmd_fh(@cmd));
+        }
     }
 
     method diff ( Gitalist::Git::Object :$commit!,

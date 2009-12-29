@@ -3,7 +3,7 @@ use MooseX::Declare;
 class Gitalist::Git::Util {
     use File::Which;
     use Git::PurePerl;
-    use IPC::Run qw(run start);
+    use IPC::Run qw(run start harness);
     use Symbol qw(geniosym);
     use MooseX::Types::Common::String qw/NonEmptySimpleStr/;
 
@@ -57,6 +57,18 @@ EOR
             '>pipe', $out,
             '2>pipe', $err
                 or die "cmd returned *?";
+        return $out;
+    }
+
+    method run_cmd_gz_fh (@args) {
+        my ($in, $out, $err) = (geniosym, geniosym, geniosym);
+        unshift @args, ('--git-dir' => $self->gitdir)
+            if $self->has_repository;
+        my $h = harness [$self->_git, @args], '<pipe', $in,
+            '|', ['gzip'],
+                '>pipe', $out,
+                '2>pipe', $err;
+        run $h or die "cmd returned *?";
         return $out;
     }
 
