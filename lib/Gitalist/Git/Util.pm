@@ -6,6 +6,8 @@ class Gitalist::Git::Util {
     use IPC::Run qw(run start harness);
     use Symbol qw(geniosym);
     use MooseX::Types::Common::String qw/NonEmptySimpleStr/;
+    use MooseX::Types::Moose qw/ArrayRef/;
+    use Moose::Autobox;
 
     has repository => (
         isa => 'Gitalist::Git::Repository',
@@ -39,36 +41,38 @@ EOR
     );
 
     method run_cmd (@args) {
-        unshift @args, ( '--git-dir' => $self->gitdir )
-            if $self->has_repository;
-#        print STDERR 'RUNNING: ', $self->_git, qq[ @args], $/;
-        run [$self->_git, @args], \my($in, $out, $err);
-
+        my @cmd = $self->make_git_cmd(@args);
+        run \@cmd, \my($in, $out, $err);
         return $out;
     }
 
-    method run_cmd_fh (@args) {
-        my ($in, $out, $err) = (geniosym, geniosym, geniosym);
+    method make_git_cmd (@args) {
         unshift @args, ('--git-dir' => $self->gitdir)
             if $self->has_repository;
-#        print STDERR 'RUNNING: ', $self->_git, qq[ @args], $/;
-        start [$self->_git, @args],
-            '<pipe', $in,
-            '>pipe', $out,
-            '2>pipe', $err
-                or die "cmd returned *?";
-        return $out;
+        return ($self->_git, @args);
     }
 
-    method run_cmd_gz_fh (@args) {
+    method run_cmd_fh (@git_args) {
+        my @cmd = $self->make_git_cmd(@git_args);
+        return $self->_real_run_cmd_fh( [\@cmd,] );
+    }
+    method run_cmd_gz_fh (@git_args) {
+        my @cmd = $self->make_git_cmd(@git_args);
+        return $self->_real_run_cmd_fh( [\@cmd, ['gzip']] );
+    }
+    method _real_run_cmd_fh (ArrayRef $commands) {
         my ($in, $out, $err) = (geniosym, geniosym, geniosym);
-        unshift @args, ('--git-dir' => $self->gitdir)
-            if $self->has_repository;
-        my $h = harness [$self->_git, @args], '<pipe', $in,
-            '|', ['gzip'],
-                '>pipe', $out,
-                '2>pipe', $err;
-        run $h or die "cmd returned *?";
+        # first command always gets stdin
+        my @cmd = ( $commands->shift,
+                    '<pipe', $in );
+        # then pipes are added for subsequent commands
+        if ($commands->length > 0) {
+            @cmd = (@cmd, @{$commands->map(sub{ ('|', $_) })});
+        }
+        # stdout/stderr go after everything else
+        my $harness = harness @cmd, '>pipe', $out,
+              '2>pipe', $err;
+        start $harness or die "cmd returned *?";
         return $out;
     }
 
