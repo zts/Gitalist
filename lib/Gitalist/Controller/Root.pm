@@ -22,8 +22,7 @@ sub index : Chained('base') PathPart('') Args(0) {
 sub css : Chained('/root') PathPart('core.css') Args(0) {
     my ( $self, $c ) = @_;
 
-    $c->response->content_type('text/css');
-    $c->stash(template => 'static/css/core.css');
+    $c->stash( template => 'static/css/core.css', content_type => 'text/css' );
 }
 
 sub base : Chained('/root') PathPart('') CaptureArgs(0) {
@@ -48,7 +47,7 @@ sub base : Chained('/root') PathPart('') CaptureArgs(0) {
     abridged_description => sub {
         join(' ', grep { defined } (split / /, shift)[0..10]);
     },
-    uri_for_gravatar => sub { # FIXME - Cache these?
+    uri_for_gravatar => sub {
         my $email = shift;
         my $size = shift;
         my $uri = 'http://www.gravatar.com/avatar/' . md5_hex($email);
@@ -68,13 +67,33 @@ Provides some help for the search form.
 
 sub search_help : Chained('base') Args(0) {}
 
-sub end : ActionClass('RenderView') {}
+sub end : ActionClass('Serialize') {
+    my ($self, $c) = @_;
+    # Give repository views the current HEAD.
+    if ($c->stash->{Repository}) {
+        $c->stash->{HEAD} = $c->stash->{Repository}->head_hash;
+    }
+    if ($c->stash->{data} && blessed $c->stash->{data}) {
+        $c->stash->{rest} = $c->stash->{data}->pack;
+    }
+}
 
 sub error_404 : Action {
     my ($self, $c) = @_;
     $c->response->status(404);
     $c->response->body('Page not found');
 }
+
+__PACKAGE__->config(
+    default => 'text/html',
+    map => {
+        'application/json' => [qw/ JSON /],
+        map { $_ => [qw/ View Default /] }
+             qw( text/css text/html text/plain
+                 application/atom+xml application/rss+xml application/rss )
+    },
+    content_type_stash_key => 'content_type',
+);
 
 __PACKAGE__->meta->make_immutable;
 

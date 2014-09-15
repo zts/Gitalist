@@ -9,14 +9,14 @@ with qw/
 /;
 
 use File::Type::WebImages ();
-use JSON::XS qw(encode_json);
+use JSON::XS qw/encode_json/;
 
 sub base : Chained('/fragment/repository/find') PathPart('') CaptureArgs(0) {}
 
 sub _diff {
     my ($self, $c) = @_;
     my %diff_args = ( patch => 1 );
-    foreach my $arg qw/filename parent/ {
+    foreach my $arg (qw/filename parent/) {
         if (defined $c->stash->{$arg}) {
             $diff_args{$arg} = $c->stash->{$arg};
         };
@@ -48,13 +48,13 @@ after tree => sub {
     my ( $self, $c ) = @_;
     my $repository = $c->stash->{Repository};
     my $commit  = $c->stash->{Commit};
-    my $tree    = $c->stash->{filename}
-      ? $repository->get_object($repository->hash_by_path($commit->sha1, $c->stash->{filename}))
-      : $repository->get_object($commit->tree_sha1)
+    my $tree_obj    = $c->stash->{filename}
+      ? $commit->sha_by_path($c->stash->{filename})
+      : $commit->tree->[0]
     ;
     $c->stash(
-        tree      => $tree,
-        tree_list => [$repository->list_tree($tree->sha1)],
+        tree      => $tree_obj,
+        tree_list => $tree_obj->tree,
     );
 };
 
@@ -62,7 +62,7 @@ after blame => sub {
     my($self, $c) = @_;
 
     my $repository = $c->stash->{Repository};
-                                                      # WTF?
+
     my $blame = $c->stash->{Commit}->blame($c->stash->{filename}, $c->stash->{Commit}->sha1);
     $c->stash(
         blame    => $blame,
@@ -71,6 +71,12 @@ after blame => sub {
 
     $c->forward('Model::ContentMangler');
 };
+
+=encoding UTF-8
+
+=head1 NAME
+
+Gitalist::Controller::Fragment::Ref - Fragment::Ref module for Gitalist::Controller
 
 =head2 blob
 
@@ -94,16 +100,12 @@ after history => sub {
 
     my %logargs = (
        sha1   => $c->stash->{Commit}->sha1,
-       count  => 25, #Gitalist->config->{paging}{log} || 25,
+       count  => Gitalist->config->{paging}{log} || 25,
        ($filename ? (file => $filename) : ())
     );
 
-    my $file = $repository->get_object(
-        $repository->hash_by_path(
-            $repository->head_hash,
-            $filename
-        )
-    );
+    my $commit = $repository->get_object('HEAD');
+    my $file = $commit->sha_by_path($filename);
 
     my $page = $c->req->param('pg') || 0;
     $logargs{skip} = $c->req->param('pg') * $logargs{count}
@@ -114,6 +116,7 @@ after history => sub {
        refs      => $repository->references,
        filename  => $filename,
        filetype  => $file->type,
+       page      => $page,
     );
 };
 

@@ -31,8 +31,15 @@ sub raw : Chained('find') Does('FilenameArgs') Args() {
         );
     }
 
+    utf8::decode($c->stash->{blob});
     $c->response->body(delete $c->stash->{blob});
 }
+
+=encoding UTF-8
+
+=head1 NAME
+
+Gitalist::Controller::Ref - Controller::Ref module for Gitalist
 
 =head2 snapshot
 

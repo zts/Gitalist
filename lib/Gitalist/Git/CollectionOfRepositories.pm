@@ -1,30 +1,44 @@
 use MooseX::Declare;
 
-role Gitalist::Git::CollectionOfRepositories {
+role Gitalist::Git::CollectionOfRepositories with Gitalist::Git::Serializable {
     use MooseX::Types::Common::String qw/NonEmptySimpleStr/;
     use MooseX::Types::Moose qw/ArrayRef/;
     use Moose::Autobox;
     use aliased 'Gitalist::Git::Repository';
 
     has repositories => (
-        is => 'ro',
-        isa => ArrayRef['Gitalist::Git::Repository'],
-        required => 1,
+        is         => 'ro',
+        isa        => ArrayRef['Gitalist::Git::Repository'],
+        required   => 1,
         lazy_build => 1,
     );
+
+    has export_ok => (
+        is => 'ro',
+        isa => 'Str',
+    );
+
     method get_repository (NonEmptySimpleStr $name) {
-        my $path = $self->_get_path_for_repository_name($name);
-        die "Not a valid git repository."
-            unless $self->_is_git_repo($path);
-        return Repository->new( $path );
+        my $repo = $self->_get_repo_from_name($name);
+        confess("Couldn't get_repository '$name' - not a valid git repository.")
+            unless $self->_is_git_repo($repo->path);
+        return $repo;
     }
+
     # Determine whether a given directory is a git repo.
+    # http://www.kernel.org/pub/software/scm/git/docs/gitrepository-layout.html
     method _is_git_repo ($dir) {
-        return -f $dir->file('HEAD') || -f $dir->file('.git', 'HEAD');
+        my $has_head   = -f $dir->file('HEAD') || -f $dir->file('.git', 'HEAD');
+        my $eok_file   = $self->export_ok
+             or return $has_head;
+        my $is_visible = $eok_file
+             && (-f $dir->file($eok_file) || -f $dir->file('.git', $eok_file));
+
+        return $has_head && $is_visible;
     }
     requires qw/
         _build_repositories
-        _get_path_for_repository_name
+        _get_repo_from_name
     /;
 
     around _build_repositories {

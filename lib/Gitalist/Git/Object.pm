@@ -1,9 +1,12 @@
 use MooseX::Declare;
 use Moose::Autobox;
 
-class Gitalist::Git::Object {
+class Gitalist::Git::Object with Gitalist::Git::Serializable is dirty {
+    use MooseX::Storage::Meta::Attribute::Trait::DoNotSerialize;
+
     use MooseX::Types::Moose qw/Str Int Bool Maybe ArrayRef/;
     use MooseX::Types::Common::String qw/NonEmptySimpleStr/;
+    use overload '""' => '_to_string', fallback => 1;
 
     # repository and sha1 are required initargs
     has repository => ( isa => 'Gitalist::Git::Repository',
@@ -31,11 +34,12 @@ class Gitalist::Git::Object {
                 lazy_build => 1 )
         for qw/modestr size/;
 
-    has _gpp_obj => ( isa => 'Git::PurePerl::Object',
-                      required => 1,
-                      is => 'ro',
+    has _gpp_obj => ( isa        => 'Git::PurePerl::Object',
+                      required   => 1,
+                      is         => 'ro',
                       lazy_build => 1,
-                      handles => [ 'content' ],
+                      handles    => [ 'content' ],
+                      traits     => ['DoNotSerialize']
                   );
 
     # objects can't determine their mode or filename
@@ -50,6 +54,9 @@ class Gitalist::Git::Object {
     method BUILD { $self->$_() for qw/_gpp_obj size modestr/ }
 
 ## Private methods
+    method _to_string {
+        return $self->sha1;
+    };
 
 ## Builders
     method _build__gpp_obj {
@@ -90,7 +97,7 @@ class Gitalist::Git::Object {
             return 'm---------';
         } elsif (S_ISDIR($mode & S_IFMT)) {
             return 'drwxr-xr-x';
-        } elsif (S_ISLNK($mode)) {
+        } elsif ($^O ne 'MSWin32' and S_ISLNK($mode)) { # this is ENOLINKS country, we can't stop here!
             return 'lrwxrwxrwx';
         } elsif (S_ISREG($mode)) {
             # git cares only about the executable bit

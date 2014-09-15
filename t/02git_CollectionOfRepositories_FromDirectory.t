@@ -1,6 +1,6 @@
 use FindBin qw/$Bin/;
 BEGIN {
-    my $env = "$FindBin::Bin/script/env";
+    my $env = "$FindBin::Bin/../script/env";
     if (-r $env) {
         do $env or die $@;
     }
@@ -11,11 +11,12 @@ use warnings;
 use Test::More qw/no_plan/;
 use Test::Exception;
 
+use Path::Class 'dir';
 use Data::Dumper;
 
 BEGIN { use_ok 'Gitalist::Git::CollectionOfRepositories::FromDirectory' }
 
-my $repo_dir = "$Bin/lib/repositories";
+my $repo_dir = dir( "$Bin/lib/repositories" );
 my $repo = Gitalist::Git::CollectionOfRepositories::FromDirectory->new( repo_dir => $repo_dir );
 isa_ok($repo, 'Gitalist::Git::CollectionOfRepositories::FromDirectory');
 
@@ -25,9 +26,6 @@ is($repo->repo_dir, $repo_dir, "repo->repo_dir is correct" );
 use Path::Class;
 my $repoBare = Path::Class::Dir->new('t/lib/repositories/bare.git');
 ok( $repo->_is_git_repo( $repoBare ), 'is_git_repo true for bare git repo' );
-
-# 'working' is a working copy w/ git repo in the repository dir
-my $repoWorking = Path::Class::Dir->new('t/lib/repositories/working');
 
 # 'empty.git' is an empty directory in the repository dir
 my $repoEmpty = Path::Class::Dir->new('t/lib/repositories/empty.git');
@@ -61,3 +59,13 @@ lives_ok {
     my $repo2 = Gitalist::Git::CollectionOfRepositories::FromDirectory->new( repo_dir => $repo2_dir );
     my $repo2_proj = $repo2->get_repository('repo1');
 } 'relative repo_dir properly handled';
+
+my $repo_eok = Gitalist::Git::CollectionOfRepositories::FromDirectory->new(
+    repo_dir  => $repo_dir,
+    export_ok => 'export-ok',
+);
+
+my @eok_repos = @{$repo_eok->repositories};
+
+is(1, @eok_repos, "Found the 1 export-ok repo");
+is('repo1', $eok_repos[0]->name, "Found repo1 export-ok repo");

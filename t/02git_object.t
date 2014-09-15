@@ -1,6 +1,6 @@
 use FindBin qw/$Bin/;
 BEGIN {
-    my $env = "$FindBin::Bin/script/env";
+    my $env = "$FindBin::Bin/../script/env";
     if (-r $env) {
         do $env or die $@;
     }
@@ -11,6 +11,7 @@ use warnings;
 use Test::More;
 use Test::Exception;
 use Data::Dumper;
+use Test::Deep;
 
 use Path::Class;
 use Gitalist::Git::Repository;
@@ -23,7 +24,7 @@ BEGIN {
     use_ok 'Gitalist::Git::Object::Blob';
     use_ok 'Gitalist::Git::Object::Commit';
     use_ok 'Gitalist::Git::Object::Tag';
-    }
+}
 
 my $object = Gitalist::Git::Object::Tree->new(
     repository => $repository,
@@ -39,6 +40,28 @@ is($object->file, 'dir1', 'file is correct');
 is($object->mode, 16384, 'mode is correct');
 is($object->modestr, 'drwxr-xr-x', "modestr is correct" );
 is($object->size, 33, "size is correct");
+is($object,'729a7c3f6ba5453b42d16a43692205f67fb23bc1', 'stringifies correctly');
+
+cmp_deeply $object->pack, {
+    __CLASS__
+         => 'Gitalist::Git::Object::Tree',
+    file   => 'dir1',
+    mode   => 16384,
+    modestr
+         => 'drwxr-xr-x',
+    repository
+         => {
+             __CLASS__   => 'Gitalist::Git::Repository',
+             description => 'some test repository',
+             is_bare     => 1,
+             last_change => '2011-06-05T23:00:44Z',
+             name        => 'repo1',
+             owner       => code(\&is_system_account_name),
+         },
+    sha1   => '729a7c3f6ba5453b42d16a43692205f67fb23bc1',
+    size   => 33,
+    type   => 'tree'
+}, 'Serialized tree correctly';
 
 # Create object from sha1.
 my $obj2 = Gitalist::Git::Object::Blob->new(
@@ -59,11 +82,72 @@ dies_ok {
     print $obj2->comment;
 } 'comment is an empty string';
 
+cmp_deeply $obj2->pack,  {
+    __CLASS__
+         => 'Gitalist::Git::Object::Blob',
+    mode   => 0,
+    modestr
+         => '----------',
+    repository
+         => {
+             __CLASS__   => 'Gitalist::Git::Repository',
+             description => 'some test repository',
+             is_bare     => 1,
+             last_change => '2011-06-05T23:00:44Z',
+             name        => 'repo1',
+             owner       => code(\&is_system_account_name),
+         },
+    sha1   => '5716ca5987cbf97d6bb54920bea6adde242d87e6',
+    size   => 4,
+    type   => 'blob'
+}, 'Serialized blob correctly';
+
 my $commit_obj = Gitalist::Git::Object::Commit->new(
     repository => $repository,
     sha1 => '3f7567c7bdf7e7ebf410926493b92d398333116e',
 );
 isa_ok($commit_obj, 'Gitalist::Git::Object::Commit', "commit object");
+isa_ok($commit_obj->tree->[0], 'Gitalist::Git::Object::Tree');
+
+cmp_deeply $commit_obj->pack,  {
+    __CLASS__
+         => 'Gitalist::Git::Object::Commit',
+    mode   => 0,
+    modestr
+         => '----------',
+    repository
+         => {
+             __CLASS__   => 'Gitalist::Git::Repository',
+             description => 'some test repository',
+             is_bare     => 1,
+             last_change => '2011-06-05T23:00:44Z',
+             name        => 'repo1',
+             owner       => code(\&is_system_account_name),
+         },
+    sha1   => '3f7567c7bdf7e7ebf410926493b92d398333116e',
+    size   => 218,
+    tree   => [ {
+        __CLASS__
+             => 'Gitalist::Git::Object::Tree',
+        mode   => 0,
+        modestr
+             => '----------',
+        repository
+             => {
+                 __CLASS__   => 'Gitalist::Git::Repository',
+                 description => 'some test repository',
+                 is_bare     => 1,
+                 last_change => '2011-06-05T23:00:44Z',
+                 name        => 'repo1',
+                 owner       => code(\&is_system_account_name),
+             },
+        sha1   => '9062594aebb5df0de7fb92413f17a9eced196c22',
+        size   => 33,
+        type   => 'tree'
+    } ],
+    type   => 'commit'
+}, 'Serialized commit correctly';
+
 my ($tree, $patch) = $commit_obj->diff(
     patch => 1,
 );
@@ -114,5 +198,23 @@ index 257cc56..5716ca5 100644
         'commit_obj->get_patch can return a patchset')
         or warn("Contents was $contents");
 }
+
+my $blame_this = Gitalist::Git::Object::Commit->new(
+    repository => $repository,
+    sha1       => 'd6ddf8b26be63066e01d96a0922c87cd8d6e2270',
+);
+
+{
+    local $SIG{ALRM} = sub { die "Regressions suck!" };
+    alarm 1;
+    eval { $blame_this->blame('empty-for-a-reason', $blame_this->sha1) };
+    is $@, '', "Silly infinite loop didn't manifest for an empty file.";
+}
+
 done_testing;
 
+sub is_system_account_name {
+    my $name = shift;
+    return 0 if !$name;
+    return 1;
+}

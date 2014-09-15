@@ -1,8 +1,9 @@
 package Gitalist::Model::CollectionOfRepos;
 
 use Moose;
-use Gitalist::Git::CollectionOfRepositories::FromDirectory;
+use Gitalist::Git::CollectionOfRepositories::FromDirectoryRecursive;
 use Gitalist::Git::CollectionOfRepositories::FromListOfDirectories;
+use Gitalist::Git::CollectionOfRepositories::FromDirectory::WhiteList;
 use MooseX::Types::Moose qw/Maybe ArrayRef/;
 use MooseX::Types::Common::String qw/NonEmptySimpleStr/;
 use Moose::Util::TypeConstraints;
@@ -49,6 +50,23 @@ has repos => (
     coerce => 1,
 );
 
+
+has search_recursively => (
+    is      => 'ro',
+    isa     => 'Bool',
+    default => 0,
+);
+
+has export_ok => (
+    is  => 'ro',
+    isa => 'Str',
+);
+
+has whitelist => (
+    is  => 'ro',
+    isa => 'Str',
+);
+
 sub _build_repo_dir {
     my $self = shift;
     $ENV{GITALIST_REPO_DIR} ?
@@ -67,17 +85,36 @@ after BUILD => sub {
 
 sub build_per_context_instance {
     my ($self, $app) = @_;
-    if ($self->_repos_count) {
-        Gitalist::Git::CollectionOfRepositories::FromListOfDirectories->new(repos => $self->repos);
+
+    my %args = (export_ok => $self->export_ok || '');
+    my $class;
+    if($self->whitelist && -f $self->whitelist) {
+        $class = 'Gitalist::Git::CollectionOfRepositories::FromDirectory::WhiteList';
+        $args{repo_dir}  = $self->repo_dir;
+        $args{whitelist} = $self->whitelist;
+    } elsif ($self->_repos_count && !$self->search_recursively) {
+        $class = 'Gitalist::Git::CollectionOfRepositories::FromListOfDirectories';
+        $args{repos} = $self->repos;
+    } elsif($self->search_recursively) {
+        $class = 'Gitalist::Git::CollectionOfRepositories::FromDirectoryRecursive';
+        $args{repo_dir} = $self->repo_dir;
+    } else {
+        $class = 'Gitalist::Git::CollectionOfRepositories::FromDirectory';
+        $args{repo_dir} = $self->repo_dir;
     }
-    else {
-        Gitalist::Git::CollectionOfRepositories::FromDirectory->new(repo_dir => $self->repo_dir);
-    }
+
+    return $class->new(%args);
 }
 
 __PACKAGE__->meta->make_immutable;
 
 __END__
+
+=encoding UTF-8
+
+=head1 NAME
+
+Gitalist::Model::CollectionOfRepos - Model::CollectionOfRepos module for Gitalist
 
 =head1 AUTHORS
 

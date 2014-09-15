@@ -64,25 +64,26 @@ requires 'Catalyst::Plugin::Static::Simple';
 requires 'Catalyst::Plugin::Unicode::Encoding';
 requires 'Catalyst::Plugin::SubRequest' => '0.15';
 requires 'Catalyst::Action::RenderView';
+requires 'Catalyst::Action::REST';
 requires 'Catalyst::Component::InstancePerContext';
 requires 'Catalyst::Controller::ActionRole';
-requires 'Catalyst::Action::REST' => '0.85';
 requires 'Catalyst::View::Component::SubInclude' => '0.07';
 requires 'Catalyst::View::TT' => '0.34';
 requires 'Try::Tiny';
 requires 'Template' => '2.22';
-requires 'Template::Provider::Encoding';
 requires 'Template::Plugin::Cycle';
+requires 'Template::Plugin::UTF8Decode';
 
 requires 'Config::General';
 
 requires 'Moose';
 requires 'Moose::Autobox';
-requires 'MooseX::MultiMethods' => '0.10';
 requires 'MooseX::Declare' => '0.32';
+requires 'MooseX::Storage';
+requires 'MooseX::Types';
 requires 'MooseX::Types::Common';
 requires 'MooseX::Types::Path::Class';
-requires 'MooseX::Types';
+requires 'MooseX::Types::ISO8601';
 requires 'namespace::autoclean';
 
 requires 'Git::PurePerl' => '0.47';
@@ -90,24 +91,25 @@ requires 'Git::PurePerl' => '0.47';
 requires 'aliased';
 requires 'CGI';
 requires 'DateTime';
-requires 'DateTime::Format::Mail';
 requires 'File::Copy::Recursive';
 requires 'File::Type';
 requires 'File::Type::WebImages';
 requires 'File::Which';
 requires 'HTML::Entities';
 requires 'IPC::Run';
+requires 'JSON';
 requires 'JSON::XS';
 requires 'List::MoreUtils';
 requires 'Path::Class' => '0.17';
-requires 'Sub::Exporter';
 requires 'Syntax::Highlight::Engine::Kate';
 requires 'Sys::Hostname';
 
 requires_external_bin 'git';
 
-test_requires 'Test::More' => '0.88';
-test_requires 'Test::utf8' => '0.02';
+test_requires 'Test::Deep'      => '0.108';
+test_requires 'Test::More'      => '0.88';
+test_requires 'Test::utf8'      => '0.02';
+test_requires 'Test::Exception' => '0.31';
 
 resources bugtracker => 'http://rt.cpan.org/Public/Dist/Display.html?Name=Gitalist';
 resources repository => 'git://git.shadowcat.co.uk/catagits/Gitalist.git';
@@ -130,7 +132,7 @@ if ($ENV{GITALIST_RELEASE_TESTING}) {
     author_requires('WWW::Mechanize::TreeBuilder');
 }
 
-install_script glob('script/*.pl');
+install_script glob('script/*.p{l,sgi}');
 auto_install;
 
 {   # Make sure you REALLY REALLY have to have the env variable set to run

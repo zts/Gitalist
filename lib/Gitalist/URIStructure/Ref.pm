@@ -20,7 +20,7 @@ after 'base' => sub {
 sub find : Chained('base') PathPart('') CaptureArgs(1) {
     my ($self, $c, $sha1part) = @_;
     # FIXME - Should not be here!
-    $c->stash->{Commit} = $c->stash->{Repository}->get_object_or_head($sha1part)
+    $c->stash->{Commit} = $c->stash->{Repository}->get_object($sha1part)
         or $c->detach('/error404', "Couldn't find a object for '$sha1part' in XXXX!");
     $c->stash->{data} = $c->stash->{Commit};
 }
@@ -34,7 +34,7 @@ sub _set_diff_args {
     $c->stash(parent   => shift @rest)
         if @rest == 2
         # Check that the single arg is unlikely to be a path.
-        or @rest && to_SHA1($rest[0]) && $c->stash->{Repository}->get_object_or_head($rest[0]);
+        or @rest && to_SHA1($rest[0]) && $c->stash->{Repository}->get_object($rest[0]);
     $c->stash(filename => $rest[-1])
       if @rest;
 }
@@ -63,15 +63,20 @@ sub tree : Chained('find') Does('FilenameArgs') Args() {}
 sub find_blob : Action {
     my ($self, $c) = @_;
     my($repo, $object) = @{$c->{stash}}{qw(Repository Commit)};
+
     # FIXME - Eugh!
-    my $h  = $object->isa('Gitalist::Git::Object::Commit')
-           ? $repo->hash_by_path($object->sha1, $c->stash->{filename})
-           : $object->isa('Gitalist::Git::Object::Blob')
-             ? $object->sha1
-             : die "Unknown object type for '${\$object->sha1}'";
+    my $blob;
+    if ($object->isa('Gitalist::Git::Object::Commit')) {
+        $blob = $object->sha_by_path($c->stash->{filename});
+    } elsif ($object->isa('Gitalist::Git::Object::Blob')) {
+        $blob = $object;
+    } else {
+        die "Unknown object type for '${\$object->sha1}'";
+    }
     die "No file or sha1 provided."
-        unless $h;
-    $c->stash(blob => $repo->get_object($h)->content);
+        unless $blob;
+
+    $c->stash(blob => $blob->content);
 }
 
 sub blob : Chained('find') Does('FilenameArgs') Args() {

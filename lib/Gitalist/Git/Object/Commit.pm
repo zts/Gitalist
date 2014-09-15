@@ -23,6 +23,23 @@ class Gitalist::Git::Object::Commit
                                       ],
                          );
 
+        method _build_tree {
+            return [$self->repository->get_object($self->tree_sha1)];
+        }
+
+        method sha_by_path ($path) {
+            $path =~ s{/+$}();
+            # FIXME should this really just take the first result?
+            my @paths = $self->repository->run_cmd('ls-tree', $self->sha1, '--', $path)
+                or return;
+            my $line = $paths[0];
+
+            #'100644 blob 0fa3f3a66fb6a137f6ec2c19351ed4d807070ffa	panic.c'
+            $line =~ m/^([0-9]+) (.+) ($SHA1RE)\t/;
+            my $sha1 = $3;
+            return $self->repository->get_object($sha1);
+    }
+
         method get_patch ( Maybe[NonEmptySimpleStr] $parent_hash?,
                            Int $patch_count?) {
             # assembling the git command to execute...
@@ -163,9 +180,9 @@ class Gitalist::Git::Object::Commit
 
       my $commit = $commitdata{$sha1};
       my $line;
-      until(($line = shift @blameout) =~ s/^\t//) {
-        $commit->{$1} = $2
-         if $line =~ /^(\S+) (.*)/;
+
+      until(@blameout == 0 || ($line = shift @blameout) =~ s/^\t//) {
+        $commit->{$1} = $2 if $line =~ /^(\S+) (.*)/;
       }
 
       unless(exists $commit->{author_dt}) {
@@ -198,7 +215,7 @@ __END__
 
 =head1 NAME
 
-Gitalist::Git::Object::Commit
+Gitalist::Git::Object::Commit - Git::Object::Commit module for Gitalist
 
 =head1 SYNOPSIS
 
@@ -232,6 +249,10 @@ Subclass of C<Gitalist::Git::Object>.
 
 
 =head1 METHODS
+
+=head2 sha_by_path ($path)
+
+Returns the tree/file sha1 for a given path in a commit.
 
 =head2 get_patch
 
